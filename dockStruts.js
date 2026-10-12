@@ -1,6 +1,6 @@
-// Reserved-extent export for dash-to-dock.
+// Reserved-extent export for dash-to-dock-with-groups.
 //
-// dash-to-dock publishes the space its dock occupies on each monitor so other
+// dash-to-dock-with-groups publishes the space its dock occupies on each monitor so other
 // extensions can avoid placing their own UI underneath it. The case that
 // motivates this is a BOTTOM dock in auto-hide/overlay mode: it claims no
 // mutter strut (so the work area does not shrink for it), yet it slides out
@@ -39,7 +39,7 @@ import {registerDestroyableType} from 'resource:///org/gnome/shell/misc/signalTr
 import {Main} from './dependencies/shell/ui.js';
 
 /**
- * Read-only view of the space dash-to-dock reserves on each monitor.
+ * Read-only view of the space dash-to-dock-with-groups reserves on each monitor.
  *
  * Published as `Main.layoutManager.dashToDockStruts` while the extension is
  * enabled. It is backed by a private {@link StrutsManager} owned by the

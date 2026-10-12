@@ -123,8 +123,8 @@ msgstr[0] "%d ფანჯრიდან გასვლა"
 msgstr[1] "%d ფანჯრიდან გასვლა"
 
 #: appIcons.js:1554
-msgid "Dash to Dock"
-msgstr "Dash to Dock"
+msgid "Dash to Dock with Groups"
+msgstr "Dash to Dock with Groups"
 
 #: appIcons.js:1556
 msgid "Settings"

@@ -5,11 +5,14 @@ import {
     Gio,
     GLib,
     GObject,
+    Meta,
+    Pango,
     Shell,
     St,
 } from './dependencies/gi.js';
 
 import {
+    AppDisplay,
     AppFavorites,
     Dash,
     DND,
@@ -22,11 +25,18 @@ import {
 } from './dependencies/shell/misc.js';
 
 import {
+    AppGroups,
     AppIcons,
     Docking,
     Theming,
     Utils,
 } from './imports.js';
+
+import {Extension} from './dependencies/shell/extensions/extension.js';
+
+// Use __ () and N__() for the extension gettext domain, and reuse
+// the shell domain with the default _() and N_()
+const {gettext: __} = Extension;
 
 // module "Dash" did not export DASH_ANIMATION_TIME in old versions
 // so we just define it like it is defined in Dash;
@@ -102,8 +112,130 @@ const DockDashIconsVerticalLayout = GObject.registerClass(
         }
     });
 
+/**
+ * Same as the upstream DragPlaceholderItem, that is not exported.
+ */
+const DockDragPlaceholderItem = GObject.registerClass(
+class DockDragPlaceholderItem extends Dash.DashItemContainer {
+    _init() {
+        super._init();
+        this.setChild(new St.Bin({style_class: 'placeholder'}));
+    }
+});
+
+/**
+ * Header of an application group: shows the group name and toggles the
+ * group collapsed state when clicked.
+ *
+ * It's a dash item, so that it lives in the dash box together with the app
+ * icons, but it has no app delegate so it's ignored by the icons logic.
+ */
+const DockGroupHeader = GObject.registerClass(
+class DockGroupHeader extends DockDashItemContainer {
+    _init(position, groupId) {
+        super._init(position);
+
+        this.groupId = groupId;
+        this._position = position;
+        this._isHorizontal = position === St.Side.TOP || position === St.Side.BOTTOM;
+        this.add_style_class_name('dash-group-header-container');
+
+        if (this._isHorizontal)
+            this.y_align = Clutter.ActorAlign.FILL;
+        else
+            this.x_align = Clutter.ActorAlign.FILL;
+
+        this._arrow = new St.Icon({
+            style_class: 'dash-group-header-arrow',
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+            x_expand: this._isHorizontal,
+            y_expand: this._isHorizontal,
+        });
+
+        this._nameLabel = new St.Label({
+            style_class: 'dash-group-header-label',
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+            visible: !this._isHorizontal,
+        });
+        this._nameLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+
+        const box = new St.BoxLayout({
+            x_expand: true,
+            y_expand: true,
+        });
+        if (box.orientation !== undefined) {
+            box.orientation = this._isHorizontal
+                ? Clutter.Orientation.VERTICAL : Clutter.Orientation.HORIZONTAL;
+        } else {
+            box.vertical = this._isHorizontal;
+        }
+        box.add_child(this._arrow);
+        box.add_child(this._nameLabel);
+
+        this.setChild(new St.Button({
+            style_class: 'dash-group-header',
+            child: box,
+            reactive: true,
+            can_focus: true,
+            track_hover: true,
+            x_expand: true,
+            y_expand: true,
+        }));
+    }
+
+    // The group name must never make the dock thicker: it's ellipsized to fit
+    // the space that the app icons need.
+    vfunc_get_preferred_width(forHeight) {
+        const [minWidth, natWidth] = super.vfunc_get_preferred_width(forHeight);
+        if (this._isHorizontal || !this._nameLabel.visible)
+            return [minWidth, natWidth];
+
+        const [, labelWidth] = this._nameLabel.get_preferred_width(-1);
+        return [0, Math.max(0, natWidth - labelWidth * this.scale_x)];
+    }
+
+    update(group, nApps, headerSize) {
+        const collapsed = !!group.collapsed;
+        this.collapsed = collapsed;
+
+        const name = group.name || __('Unnamed Group');
+        const fullName = collapsed ? `${name} (${nApps})` : name;
+        this._nameLabel.text = fullName;
+        this.setLabelText(fullName);
+
+        let iconName;
+        if (!collapsed)
+            iconName = this._isHorizontal ? 'pan-end-symbolic' : 'pan-down-symbolic';
+        else if (this._position === St.Side.BOTTOM)
+            iconName = 'pan-up-symbolic';
+        else if (this._position === St.Side.TOP)
+            iconName = 'pan-down-symbolic';
+        else if (this._position === St.Side.RIGHT)
+            iconName = 'pan-start-symbolic';
+        else
+            iconName = 'pan-end-symbolic';
+        this._arrow.icon_name = iconName;
+
+        this.child.set_style(this._isHorizontal
+            ? `min-width: ${headerSize}px;` : `min-height: ${headerSize}px;`);
+    }
+});
+
 
 const baseIconSizes = [16, 22, 24, 32, 48, 64, 96, 128];
+
+/**
+ * @param {object} source a drag source
+ * @returns {Shell.App} the dragged app, if any
+ */
+function getAppFromSource(source) {
+    if (Dash.Dash.getAppFromSource)
+        return Dash.Dash.getAppFromSource(source);
+
+    return source instanceof AppDisplay.AppIcon ? source.app : null;
+}
 
 /**
  * This class is a fork of the upstream dash class (ui.dash.js)
@@ -158,6 +290,13 @@ export const DockDash = GObject.registerClass({
         this._signalsHandler = new Utils.GlobalSignalsHandler(this);
 
         this._separator = null;
+
+        // Group headers, by group id, and the groups as currently displayed
+        // (null when groups are disabled)
+        this._groupHeaders = new Map();
+        this._groupsLayout = null;
+        this._groupDropTarget = null;
+        this._groupsStyled = false;
 
         this._monitorIndex = monitorIndex;
         this._position = Utils.getPosition();
@@ -258,6 +397,12 @@ export const DockDash = GObject.registerClass({
         }));
         this._background.add_child(sizerBox);
 
+        // Group backgrounds are aligned to the dash background
+        this._background.connect('style-changed', () => {
+            if (this._groupsLayout)
+                this._queueRedisplay();
+        });
+
         this.add_child(this._background);
         this.add_child(this._dashContainer);
 
@@ -338,6 +483,9 @@ export const DockDash = GObject.registerClass({
     _onDestroy() {
         this.iconAnimator.destroy();
 
+        this._groupHeaders.forEach(header => header.destroy());
+        this._groupHeaders.clear();
+
         if (this._requiresVisibilityTimeout) {
             GLib.source_remove(this._requiresVisibilityTimeout);
             delete this._requiresVisibilityTimeout;
@@ -391,17 +539,18 @@ export const DockDash = GObject.registerClass({
         return Dash.Dash.prototype._syncLabel.call(this, ...args);
     }
 
-    _clearDragPlaceholder(...args) {
-        return Dash.Dash.prototype._clearDragPlaceholder.call(this, ...args);
-    }
-
     _clearEmptyDropTarget(...args) {
         return Dash.Dash.prototype._clearEmptyDropTarget.call(this, ...args);
     }
 
     handleDragOver(source, actor, x, y, time) {
         let ret;
-        if (this._isHorizontal) {
+        if (this._groupsLayout) {
+            ret = this._handleGroupsDragOver(source, x, y);
+
+            if (ret === DND.DragMotionResult.CONTINUE)
+                return ret;
+        } else if (this._isHorizontal) {
             ret = Dash.Dash.prototype.handleDragOver.call(this, source, actor, x, y, time);
 
             if (ret === DND.DragMotionResult.CONTINUE)
@@ -461,7 +610,165 @@ export const DockDash = GObject.registerClass({
     }
 
     acceptDrop(...args) {
+        if (this._groupsLayout)
+            return this._acceptGroupsDrop(...args);
+
         return Dash.Dash.prototype.acceptDrop.call(this, ...args);
+    }
+
+    _clearDragPlaceholder(...args) {
+        this._groupDropTarget = null;
+        return Dash.Dash.prototype._clearDragPlaceholder.call(this, ...args);
+    }
+
+    /**
+     * Drag and drop handling when the apps are organized in groups: the drop
+     * position decides both the group the app is moved to and its position in
+     * the group (or in the favorites, for the ungrouped apps).
+     *
+     * @param {object} source the dragged object
+     * @param {number} x the pointer position, relative to this._box
+     * @param {number} y the pointer position, relative to this._box
+     */
+    _handleGroupsDragOver(source, x, y) {
+        const app = getAppFromSource(source);
+
+        // Don't allow favoriting of transient apps, nor grouping of locations
+        if (!app || app.is_window_backed() || app.location)
+            return DND.DragMotionResult.NO_DROP;
+
+        if (!global.settings.is_writable('favorite-apps'))
+            return DND.DragMotionResult.NO_DROP;
+
+        const appOf = actor => actor?.child?._delegate?.app ?? null;
+        const isHeader = actor => actor instanceof DockGroupHeader;
+        const children = this._box.get_children().filter(c =>
+            c !== this._dragPlaceholder && !c.animatingOut && c.visible);
+
+        // Locations are always at the end, outside of the groups.
+        let lastIndex = children.findIndex(c => appOf(c)?.location);
+        if (lastIndex === -1)
+            lastIndex = children.length;
+
+        const rtl = this._isHorizontal &&
+            this.text_direction === Clutter.TextDirection.RTL;
+        const coord = this._isHorizontal ? x : y;
+        let index = children.findIndex(c => {
+            const center = this._isHorizontal
+                ? (c.allocation.x1 + c.allocation.x2) / 2
+                : (c.allocation.y1 + c.allocation.y2) / 2;
+            return rtl ? coord > center : coord < center;
+        });
+        if (index === -1 || index > lastIndex)
+            index = lastIndex;
+
+        // Nothing can go before the first group header.
+        if (index === 0 && isHeader(children[0]))
+            index = 1;
+
+        let headerIndex = index - 1;
+        while (headerIndex >= 0 && !isHeader(children[headerIndex]))
+            headerIndex--;
+
+        const groupId = headerIndex >= 0
+            ? children[headerIndex].groupId : AppGroups.OTHER_GROUP_ID;
+        const prevApp = appOf(children[index - 1]);
+        const nextApp = index < lastIndex && !isHeader(children[index])
+            ? appOf(children[index]) : null;
+        const groupPos = children.slice(headerIndex + 1, index).filter(c => {
+            const childApp = appOf(c);
+            return childApp && childApp !== app;
+        }).length;
+
+        const next = children[index] ?? null;
+        if (next !== this._groupDropTarget?.next &&
+            this._animatingPlaceholdersCount === 0) {
+            // Don't allow positioning before or after self
+            if (prevApp === app || appOf(next) === app) {
+                this._clearDragPlaceholder();
+                return DND.DragMotionResult.CONTINUE;
+            }
+
+            // If the placeholder already exists, we just move
+            // it, but if we are adding it, expand its size in
+            // an animation
+            const fadeIn = !this._dragPlaceholder;
+            this._dragPlaceholder?.destroy();
+
+            this._dragPlaceholder = new DockDragPlaceholderItem();
+            this._dragPlaceholder.child.set_width(
+                this._isHorizontal ? this.iconSize : this.iconSize / 2);
+            this._dragPlaceholder.child.set_height(
+                this._isHorizontal ? this.iconSize / 2 : this.iconSize);
+
+            if (next)
+                this._box.insert_child_below(this._dragPlaceholder, next);
+            else
+                this._box.add_child(this._dragPlaceholder);
+
+            this._dragPlaceholder.show(fadeIn);
+            this._dragPlaceholderPos =
+                this._box.get_children().indexOf(this._dragPlaceholder);
+            this._groupDropTarget = {next, groupId, groupPos, prevApp, nextApp};
+        }
+
+        if (!this._dragPlaceholder)
+            return DND.DragMotionResult.NO_DROP;
+
+        return DND.DragMotionResult.MOVE_DROP;
+    }
+
+    _acceptGroupsDrop(source) {
+        const app = getAppFromSource(source);
+
+        if (!app || app.is_window_backed() || app.location)
+            return false;
+
+        if (!global.settings.is_writable('favorite-apps'))
+            return false;
+
+        // No drag placeholder means we are dragging the app to its
+        // original position
+        if (!this._dragPlaceholder || !this._groupDropTarget)
+            return true;
+
+        const {groupId, groupPos, prevApp, nextApp} = this._groupDropTarget;
+        const id = app.get_id();
+
+        Utils.laterAdd(Meta.LaterType.BEFORE_REDRAW, () => {
+            const {settings} = Docking.DockManager;
+            const groups = AppGroups.parseGroups(settings.appGroups);
+            AppGroups.moveAppToGroup(groups, id, groupId, groupPos);
+            settings.set_string('app-groups', AppGroups.serializeGroups(groups));
+
+            const appFavorites = AppFavorites.getAppFavorites();
+            const srcIsFavorite = appFavorites.isFavorite(id);
+
+            if (groupId !== AppGroups.OTHER_GROUP_ID) {
+                // Grouped apps are ordered by the group, just ensure it's pinned
+                if (!srcIsFavorite)
+                    appFavorites.addFavorite(id);
+                return GLib.SOURCE_REMOVE;
+            }
+
+            // Ungrouped apps are shown in favorites order, so move it there.
+            const favoriteIds = appFavorites.getFavorites().map(a => a.get_id())
+                .filter(favId => favId !== id);
+            let favPos = -1;
+            if (nextApp && favoriteIds.includes(nextApp.get_id()))
+                favPos = favoriteIds.indexOf(nextApp.get_id());
+            else if (prevApp && favoriteIds.includes(prevApp.get_id()))
+                favPos = favoriteIds.indexOf(prevApp.get_id()) + 1;
+
+            if (srcIsFavorite)
+                appFavorites.moveFavoriteToPos(id, favPos);
+            else
+                appFavorites.addFavoriteAtPos(id, favPos);
+
+            return GLib.SOURCE_REMOVE;
+        });
+
+        return true;
     }
 
     _onWindowDragBegin(...args) {
@@ -713,6 +1020,16 @@ export const DockDash = GObject.registerClass({
             }
         }
 
+        if (this._groupsLayout) {
+            const {scaleFactor: themeScale} = St.ThemeContext.get_for_stage(global.stage);
+            const groupSpacing = Docking.DockManager.settings.groupSpacing * themeScale;
+            this._groupHeaders.forEach(header => {
+                const [, , headerWidth, headerHeight] = header.get_preferred_size();
+                availSpace -= (this._isHorizontal ? headerWidth : headerHeight) +
+                    spacing + groupSpacing;
+            });
+        }
+
         const maxIconSize = availSpace / iconChildren.length;
         const {scaleFactor} = St.ThemeContext.get_for_stage(global.stage);
         const iconSizes = this._availableIconSizes.map(s => s * scaleFactor);
@@ -865,10 +1182,18 @@ export const DockDash = GObject.registerClass({
             oldApps = oldApps.filter(app => !app.isTrash);
         }
 
+        const groupsLayout = settings.enableGroups
+            ? this._arrangeAppsInGroups(newApps) : null;
+        if (groupsLayout)
+            newApps.splice(0, newApps.length, ...groupsLayout.apps);
+
         // Temporary remove the separator so that we don't compute to position icons
         const oldSeparatorPos = this._box.get_children().indexOf(this._separator);
         if (this._separator)
             this._box.remove_child(this._separator);
+
+        // Same for the group headers, they're placed back once icons are in place
+        this._groupHeaders.forEach(header => header.get_parent()?.remove_child(header));
 
         // Figure out the actual changes to the list of items; we iterate
         // over both the list of items currently in the dash and the list
@@ -963,7 +1288,7 @@ export const DockDash = GObject.registerClass({
         // Update separator
         const nFavorites = Object.keys(favorites).length;
         const nIcons = children.length + addedItems.length - removedActors.length;
-        if (nFavorites > 0 && nFavorites < nIcons) {
+        if (!groupsLayout && nFavorites > 0 && nFavorites < nIcons) {
             if (!this._separator) {
                 this._separator = new St.Widget({
                     style_class: 'dash-separator',
@@ -990,6 +1315,8 @@ export const DockDash = GObject.registerClass({
             this._separator = null;
         }
 
+        this._updateGroupHeaders(groupsLayout);
+
         this._adjustIconSize();
 
         // Skip animations on first run when adding the initial set
@@ -1006,6 +1333,239 @@ export const DockDash = GObject.registerClass({
         this._updateNumberOverlay();
 
         this.updateShowAppsButton();
+    }
+
+    /**
+     * Sort the apps by group.
+     *
+     * @param {Shell.App[]} apps the apps to show in the dash
+     * @returns {object} the displayed groups with their apps, and the apps
+     * to show in the dash, apps of collapsed groups excluded
+     */
+    _arrangeAppsInGroups(apps) {
+        const {settings} = Docking.DockManager;
+        const groups = AppGroups.parseGroups(settings.appGroups);
+        const locations = apps.filter(app => app.location);
+        const appsById = new Map(apps.filter(app => !app.location).map(app =>
+            [app.get_id(), app]));
+        const assigned = new Set();
+
+        const groupsApps = new Map(groups.filter(g => !AppGroups.isOtherGroup(g)).map(group => {
+            const groupApps = group.apps.map(id => appsById.get(id)).filter(app => {
+                if (!app || assigned.has(app))
+                    return false;
+                assigned.add(app);
+                return true;
+            });
+            return [group, groupApps];
+        }));
+
+        // Ungrouped apps keep the default dash order
+        const otherApps = settings.showUngrouped
+            ? [...appsById.values()].filter(app => !assigned.has(app)) : [];
+
+        const displayedGroups = groups.map(group => ({
+            group,
+            apps: AppGroups.isOtherGroup(group) ? otherApps : groupsApps.get(group),
+        })).filter(({apps: groupApps}) => groupApps.length);
+
+        return {
+            groups: displayedGroups,
+            apps: [
+                ...displayedGroups.flatMap(({group, apps: groupApps}) =>
+                    group.collapsed ? [] : groupApps),
+                ...locations,
+            ],
+        };
+    }
+
+    _createGroupHeader(groupId) {
+        const header = new DockGroupHeader(this._position, groupId);
+        header.child.connect('clicked', () => this._toggleGroupCollapsed(groupId));
+        header.child.connect('notify::hover', a => this._ensureItemVisibility(a));
+        this._hookUpLabel(header);
+        header.show(false);
+        return header;
+    }
+
+    _toggleGroupCollapsed(groupId) {
+        const {settings} = Docking.DockManager;
+        const groups = AppGroups.parseGroups(settings.appGroups);
+        const group = groups.find(g => g.id === groupId);
+        if (!group)
+            return;
+
+        group.collapsed = !group.collapsed;
+        settings.set_string('app-groups', AppGroups.serializeGroups(groups));
+    }
+
+    /**
+     * Place the group headers before the apps of each group and paint the
+     * group backgrounds, or clean them up if groups are disabled.
+     *
+     * @param {object} groupsLayout the layout from _arrangeAppsInGroups()
+     */
+    _updateGroupHeaders(groupsLayout) {
+        const {settings} = Docking.DockManager;
+        const displayedIds = new Set(groupsLayout?.groups.map(({group}) => group.id));
+
+        this._groupHeaders.forEach((header, id) => {
+            if (!displayedIds.has(id)) {
+                header.destroy();
+                this._groupHeaders.delete(id);
+            }
+        });
+
+        this._groupsLayout = groupsLayout;
+
+        const items = this._box.get_children().filter(actor =>
+            actor.child?._delegate?.app && !actor.animatingOut);
+
+        if (!groupsLayout) {
+            if (this._groupsStyled) {
+                this._box.get_children().filter(actor => actor.child?._delegate?.app)
+                    .forEach(item => this._setGroupItemStyle(item, null));
+            }
+            this._groupsStyled = false;
+            return;
+        }
+
+        const crossInsets = this._getGroupCrossInsets();
+        const itemsByApp = new Map(items.map(item => [item.child._delegate.app, item]));
+        // Items of just collapsed groups are still there while animating out
+        const leavingItems = this._box.get_children().filter(actor =>
+            actor.child?._delegate?.app && actor.animatingOut);
+        const locationItems = items.filter(item => item.child._delegate.app.location);
+        locationItems.forEach(item => this._setGroupItemStyle(item, null));
+
+        // Go backwards, so that each header can be placed before the next one
+        // when its group is collapsed.
+        let nextActor = locationItems[0] ?? null;
+        for (let i = groupsLayout.groups.length - 1; i >= 0; i--) {
+            const {group, apps} = groupsLayout.groups[i];
+            let header = this._groupHeaders.get(group.id);
+            if (!header) {
+                header = this._createGroupHeader(group.id);
+                this._groupHeaders.set(group.id, header);
+            }
+            header.update(group, apps.length, settings.groupHeaderSize);
+
+            const groupItems = group.collapsed ? []
+                : apps.map(app => itemsByApp.get(app)).filter(item => item);
+            const sibling = groupItems[0] ??
+                leavingItems.find(item => apps.includes(item.child._delegate.app)) ??
+                nextActor;
+            if (sibling)
+                this._box.insert_child_below(header, sibling);
+            else
+                this._box.add_child(header);
+            nextActor = header;
+
+            const members = [header, ...groupItems];
+            members.forEach((actor, index) => this._setGroupItemStyle(actor, group,
+                index === 0, index === members.length - 1, crossInsets));
+        }
+
+        this._groupsStyled = true;
+    }
+
+    /**
+     * The app icons have an extra padding towards the screen edge (and the
+     * opposite one, when the dock is fixed) where the dash background has a
+     * margin instead. Compute how much to move from the icons padding to the
+     * items margin, so that group backgrounds stay within the dash background.
+     *
+     * @returns {object[]} for each side across the dock, the item margin and
+     * the icon padding, in CSS pixels
+     */
+    _getGroupCrossInsets() {
+        const sides = this._isHorizontal
+            ? [St.Side.TOP, St.Side.BOTTOM] : [St.Side.LEFT, St.Side.RIGHT];
+        const {scaleFactor} = St.ThemeContext.get_for_stage(global.stage);
+        const backgroundNode = this._background.get_theme_node();
+        const buttonNode = this._showAppsIcon.toggleButton.get_theme_node();
+
+        return sides.map(side => {
+            const padding = buttonNode.get_padding(side) / scaleFactor;
+            const margin = Math.min(padding,
+                Math.max(0, backgroundNode.get_margin(side) / scaleFactor));
+            return {
+                name: ['top', 'right', 'bottom', 'left'][side],
+                margin,
+                padding: padding - margin,
+            };
+        });
+    }
+
+    _setGroupItemStyle(actor, group, isFirst, isLast, crossInsets) {
+        const isHeader = actor instanceof DockGroupHeader;
+
+        if (!group) {
+            actor.set_style(null);
+            if (!isHeader) {
+                actor.child?.set_style(null);
+                if (!this._isHorizontal)
+                    actor.x_align = Clutter.ActorAlign.CENTER;
+            }
+            return;
+        }
+
+        if (!isHeader) {
+            actor.child.set_style(crossInsets.map(({name, padding}) =>
+                `padding-${name}: ${padding}px;`).join(' '));
+            if (!this._isHorizontal)
+                actor.x_align = Clutter.ActorAlign.FILL;
+        }
+
+        const {settings} = Docking.DockManager;
+        const rtl = this._isHorizontal &&
+            this.text_direction === Clutter.TextDirection.RTL;
+        const [start, end] = this._isHorizontal
+            ? rtl ? ['right', 'left'] : ['left', 'right']
+            : ['top', 'bottom'];
+        const sides = this._isHorizontal ? ['top', 'bottom'] : ['left', 'right'];
+
+        const bg = AppGroups.parseHexColor(group.color);
+        const bd = AppGroups.parseHexColor(group.borderColor);
+        const opacity = Utils.clampDouble(group.opacity ?? 0.8);
+        const borderWidth = Math.max(0, group.borderWidth ?? 1);
+        const border = `solid rgba(${bd.r}, ${bd.g}, ${bd.b}, 0.8)`;
+        const radius = Math.max(0, settings.groupCornerRadius);
+        const startRadius = isFirst ? radius : 0;
+        const endRadius = isLast ? radius : 0;
+
+        // corners order: top-left, top-right, bottom-right, bottom-left
+        let corners;
+        if (!this._isHorizontal)
+            corners = [startRadius, startRadius, endRadius, endRadius];
+        else if (rtl)
+            corners = [endRadius, startRadius, startRadius, endRadius];
+        else
+            corners = [startRadius, endRadius, endRadius, startRadius];
+
+        // Box spacing is replaced by padding, so that the background has no
+        // holes between the group items.
+        const iconsDistance = isHeader ? 0 : 2;
+
+        actor.set_style([
+            `background-color: rgba(${bg.r}, ${bg.g}, ${bg.b}, ${opacity});`,
+            `border-radius: ${corners.map(c => `${c}px`).join(' ')};`,
+            ...sides.map(side => `border-${side}: ${borderWidth}px ${border};`),
+            `border-${start}: ${isFirst ? borderWidth : 0}px ${border};`,
+            `border-${end}: ${isLast ? borderWidth : 0}px ${border};`,
+            ...crossInsets.map(({name, margin}) => `margin-${name}: ${margin}px;`),
+            `margin-${start}: 0;`,
+            `margin-${end}: ${isLast ? Math.max(0, settings.groupSpacing) : 0}px;`,
+            `padding-${start}: ${iconsDistance}px;`,
+            `padding-${end}: ${iconsDistance}px;`,
+        ].join(' '));
+    }
+
+    /**
+     * Update the dash after the groups configuration changed
+     */
+    updateGroups() {
+        this._queueRedisplay();
     }
 
     _updateNumberOverlay() {

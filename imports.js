@@ -1,3 +1,4 @@
+export * as AppGroups from './appGroups.js';
 export * as AppIconIndicators from './appIconIndicators.js';
 export * as AppIcons from './appIcons.js';
 export * as AppIconsDecorator from './appIconsDecorator.js';

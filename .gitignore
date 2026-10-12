@@ -1,9 +1,9 @@
 .~
 *~
 gschemas.compiled
-dash-to-dock@micxgx.gmail.com.zip
+dash-to-dock-with-groups@danofnz.github.io.zip
 *.mo
-po/dashtodock.pot
+po/dash-to-dock-with-groups.pot
 stylesheet.css
 Settings.ui.h
 _build

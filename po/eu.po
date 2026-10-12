@@ -125,8 +125,8 @@ msgstr[0] "Itxi leihoa"
 msgstr[1] "Itxi %d leihoak"
 
 #: appIcons.js:1560
-msgid "Dash to Dock"
-msgstr "Dash to Dock"
+msgid "Dash to Dock with Groups"
+msgstr "Dash to Dock with Groups"
 
 #: appIcons.js:1562
 msgid "Settings"

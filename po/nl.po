@@ -8,7 +8,7 @@
 # Heimen Stoffels <vistausss@outlook.com>, 2015, 2019.
 msgid ""
 msgstr ""
-"Project-Id-Version: Dash to Dock\n"
+"Project-Id-Version: Dash to Dock with Groups\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2019-10-10 20:27+0200\n"
 "PO-Revision-Date: 2019-10-10 20:46+0200\n"

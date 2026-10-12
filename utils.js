@@ -12,7 +12,7 @@ import {
     Docking,
 } from './imports.js';
 
-// Dash to dock supports replacing vfuncs in GObject classes and we need
+// Dash to Dock with Groups supports replacing vfuncs in GObject classes and we need
 // this to monkey them.
 const {_gi: Gi} = imports;
 

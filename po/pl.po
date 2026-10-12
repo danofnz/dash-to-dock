@@ -131,8 +131,8 @@ msgstr[1] "Zamknij %d okna"
 msgstr[2] "Zamknij %d okien"
 
 #: appIcons.js:1578
-msgid "Dash to Dock"
-msgstr "Dash to Dock"
+msgid "Dash to Dock with Groups"
+msgstr "Dash to Dock with Groups"
 
 #: appIcons.js:1580
 msgid "Settings"

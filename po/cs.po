@@ -6,7 +6,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Dash to Dock\n"
+"Project-Id-Version: Dash to Dock with Groups\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-09-21 23:16+0200\n"
 "PO-Revision-Date: 2026-09-25 01:36+0200\n"
@@ -126,8 +126,8 @@ msgstr[1] "Ukončit %d okna"
 msgstr[2] "Ukončit %d oken"
 
 #: appIcons.js:1585
-msgid "Dash to Dock"
-msgstr "Dash to Dock"
+msgid "Dash to Dock with Groups"
+msgstr "Dash to Dock with Groups"
 
 #: appIcons.js:1587
 msgid "Settings"

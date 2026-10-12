@@ -1,6 +1,6 @@
 # Basic Makefile
 
-UUID = dash-to-dock@micxgx.gmail.com
+UUID = dash-to-dock-with-groups@danofnz.github.io
 BASE_MODULES = extension.js \
                metadata.json \
                COPYING \
@@ -8,6 +8,7 @@ BASE_MODULES = extension.js \
                $(NULL)
 
 EXTRA_MODULES = \
+                appGroups.js \
                 appSpread.js \
                 dash.js \
                 docking.js \
@@ -46,7 +47,7 @@ else
 	SHARE_PREFIX = $(DESTDIR)/usr/share
 	INSTALLBASE = $(SHARE_PREFIX)/gnome-shell/extensions
 endif
-INSTALLNAME = dash-to-dock@micxgx.gmail.com
+INSTALLNAME = dash-to-dock-with-groups@danofnz.github.io
 
 # The command line passed variable VERSION is used to set the version string
 # in the metadata and in the generated zip-file. If no VERSION is passed, the
@@ -68,21 +69,21 @@ clean:
 
 extension: ./schemas/gschemas.compiled ./stylesheet.css $(MSGSRC:.po=.mo)
 
-./schemas/gschemas.compiled: ./schemas/org.gnome.shell.extensions.dash-to-dock.gschema.xml
+./schemas/gschemas.compiled: ./schemas/org.gnome.shell.extensions.dash-to-dock-with-groups.gschema.xml
 	glib-compile-schemas ./schemas/
 
-potfile: ./po/dashtodock.pot
+potfile: ./po/dash-to-dock-with-groups.pot
 
 mergepo: potfile
 	for l in $(MSGSRC); do \
-		msgmerge -U $$l ./po/dashtodock.pot; \
+		msgmerge -U $$l ./po/dash-to-dock-with-groups.pot; \
 	done;
 
 POTFILES_IN = po/POTFILES.in
 POTFILES = $(shell cat $(POTFILES_IN))
 
-./po/dashtodock.pot: $(POTFILES_IN) $(POTFILES)
-	xgettext --keyword=__ --keyword=N__:1,2 --add-comments='TRANSLATORS:' -o po/dashtodock.pot --package-name "Dash to Dock" --from-code=utf-8 --files-from=$<
+./po/dash-to-dock-with-groups.pot: $(POTFILES_IN) $(POTFILES)
+	xgettext --keyword=__ --keyword=N__:1,2 --add-comments='TRANSLATORS:' -o po/dash-to-dock-with-groups.pot --package-name "Dash to Dock with Groups" --from-code=utf-8 --files-from=$<
 
 ./po/%.mo: ./po/%.po
 	msgfmt -c $< -o $@
@@ -137,7 +138,7 @@ _build: all
 		lf=_build/locale/`basename $$l .mo`; \
 		mkdir -p $$lf; \
 		mkdir -p $$lf/LC_MESSAGES; \
-		cp $$l $$lf/LC_MESSAGES/dashtodock.mo; \
+		cp $$l $$lf/LC_MESSAGES/dash-to-dock-with-groups.mo; \
 	done;
 	sed -i 's/"version": -1/"version": "$(VERSION)"/'  _build/metadata.json;
 

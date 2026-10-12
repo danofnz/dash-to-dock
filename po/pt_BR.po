@@ -9,7 +9,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Dash to Dock\n"
+"Project-Id-Version: Dash to Dock with Groups\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2022-05-24 21:07-0300\n"
 "PO-Revision-Date: 2026-09-21 15:54-0300\n"
@@ -134,8 +134,8 @@ msgstr[0] "%s, %d notificação não lida"
 msgstr[1] "%s, %d notificações não lidas"
 
 #: appIcons.js:1511
-msgid "Dash to Dock"
-msgstr "Dash to Dock"
+msgid "Dash to Dock with Groups"
+msgstr "Dash to Dock with Groups"
 
 #: appIcons.js:1513
 msgid "Settings"

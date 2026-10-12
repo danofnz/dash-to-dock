@@ -85,7 +85,7 @@ const WorkspaceLayout = Object.freeze({
 
     // Maximum share of the available width the current workspace may take in
     // the window picker. Stock GNOME ends up around this ratio by reserving the
-    // bottom dash space, which dash-to-dock removes.
+    // bottom dash space, which dash-to-dock-with-groups removes.
     MAX_WIDTH_RATIO: 0.80,
 
     // Minimum width share the current workspace keeps on narrow work areas.
@@ -649,6 +649,20 @@ const DockedDash = GObject.registerClass({
             },
         ], [
             settings,
+            'changed::enable-groups',
+            () => this.dash.resetAppIcons(),
+        ], ...[
+            'app-groups',
+            'show-ungrouped',
+            'group-spacing',
+            'group-corner-radius',
+            'group-header-size',
+        ].map(key => [
+            settings,
+            `changed::${key}`,
+            () => this.dash.updateGroups(),
+        ]), [
+            settings,
             'changed::show-apps-always-in-the-edge',
             () => {
                 this.dash.updateShowAppsButton();
@@ -1027,7 +1041,7 @@ const DockedDash = GObject.registerClass({
                     DockManager.settings.showDelay * 1000,
                     this._dockDwellTimeout.bind(this));
                 GLib.Source.set_name_by_id(this._dockDwellTimeoutId,
-                    '[dash-to-dock] this._dockDwellTimeout');
+                    '[dash-to-dock-with-groups] this._dockDwellTimeout');
             }
             this._dockDwelling = true;
         } else {
@@ -1843,7 +1857,7 @@ export class DockManager {
         this._vfuncInjections = new Utils.VFuncInjectionsHandler(this);
         this._propertyInjections = new Utils.PropertyInjectionsHandler(this);
         this._settings = this._extension.getSettings(
-            'org.gnome.shell.extensions.dash-to-dock');
+            'org.gnome.shell.extensions.dash-to-dock-with-groups');
         this._appSwitcherSettings = new Gio.Settings({schema_id: 'org.gnome.shell.app-switcher'});
         this._mapSettingsValues();
 
