@@ -33,7 +33,7 @@ Clone the repository or download the branch from github. A simple Makefile is in
 Next use `make` to install the extension into your home directory. A Shell reload is required <kbd>Alt</kbd> + <kbd>F2</kbd> <kbd>r</kbd> <kbd>Enter</kbd> under Xorg or under Wayland you may have to logout and login. The extension has to be enabled  with *gnome-extensions-app* (GNOME Extensions) or with *dconf*.
 
 ```bash
-git clone https://github.com/danofnz/dash-to-dock.git dash-to-dock-with-groups
+git clone https://github.com/danofnz/dash-to-dock-with-groups.git
 make -C dash-to-dock-with-groups install
 ```
 
@@ -69,7 +69,7 @@ dconf write /org/gnome/shell/extensions/dash-to-dock-with-groups/app-groups \
 
 ## Bug Reporting
 
-Bugs should be reported to the Github bug tracker [https://github.com/danofnz/dash-to-dock/issues](https://github.com/danofnz/dash-to-dock/issues).
+Bugs should be reported to the Github bug tracker [https://github.com/danofnz/dash-to-dock-with-groups/issues](https://github.com/danofnz/dash-to-dock-with-groups/issues).
 
 ## License
 Dash to Dock with Groups Gnome Shell extension is distributed under the terms of the GNU General Public License,

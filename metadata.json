@@ -12,7 +12,7 @@
 "name": "Dash to Dock with Groups",
 "description": "A dock for the Gnome Shell. This extension moves the dash out of the overview transforming it in a dock for an easier launching of applications and a faster switching between windows and desktops. Side and bottom placement options are available. Applications can be organized in named, collapsible groups. Based on Dash to Dock by Michele, with grouping from Multi-Column Dock.",
 "original-author": "micxgx@gmail.com",
-"url": "https://github.com/danofnz/dash-to-dock",
+"url": "https://github.com/danofnz/dash-to-dock-with-groups",
 "gettext-domain": "dash-to-dock-with-groups",
 "version": 110
 }
