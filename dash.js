@@ -127,6 +127,11 @@ class DockDragPlaceholderItem extends Dash.DashItemContainer {
  * Header of an application group: shows the group name and toggles the
  * group collapsed state when clicked.
  *
+ * Application groups (this class, _handleGroupsDragOver(), _acceptGroupsDrop()
+ * and the group layout methods of DockDash) are derived from Multi-Column
+ * Dock, Copyright (c) 2025 Smart Coding & AI with Aliiman, under the MIT
+ * license: see LICENSE-Multi-Column-Dock.
+ *
  * It's a dash item, so that it lives in the dash box together with the app
  * icons, but it has no app delegate so it's ignored by the icons logic.
  */

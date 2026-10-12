@@ -13,6 +13,9 @@
  *
  * This module must not depend on Shell or Gtk libraries, as it's imported by
  * both sides.
+ *
+ * Derived from Multi-Column Dock, Copyright (c) 2025 Smart Coding & AI with
+ * Aliiman, under the MIT license: see LICENSE-Multi-Column-Dock.
  */
 
 export const OTHER_GROUP_ID = '__other__';

@@ -4,6 +4,7 @@ UUID = dash-to-dock-with-groups@danofnz.github.io
 BASE_MODULES = extension.js \
                metadata.json \
                COPYING \
+               LICENSE-Multi-Column-Dock \
                README.md \
                $(NULL)
 

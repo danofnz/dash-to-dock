@@ -74,3 +74,7 @@ Bugs should be reported to the Github bug tracker [https://github.com/danofnz/da
 ## License
 Dash to Dock with Groups Gnome Shell extension is distributed under the terms of the GNU General Public License,
 version 2 or later. See the COPYING file for details.
+
+The application groups feature is derived from [Multi-Column Dock](https://github.com/AITwinMinds/Multi-column-dock),
+Copyright (c) 2025 Smart Coding & AI with Aliiman, used under the MIT license. See the
+LICENSE-Multi-Column-Dock file for its copyright and permission notice.

@@ -1217,6 +1217,10 @@ function hexFromRgba(rgba) {
 
 /**
  * Editor for a single application group: name, style and member apps.
+ *
+ * The groups preferences (this class and GroupsPage) are derived from
+ * Multi-Column Dock, Copyright (c) 2025 Smart Coding & AI with Aliiman, under
+ * the MIT license: see LICENSE-Multi-Column-Dock.
  */
 const GroupEditorWindow = GObject.registerClass(
 class GroupEditorWindow extends Adw.Window {
